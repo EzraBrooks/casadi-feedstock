@@ -1,0 +1,104 @@
+schema_version: 1
+
+context:
+  name: casadi
+  version: "3.7.2"
+
+package:
+  name: ${{ name|lower }}
+  version: ${{ version }}
+
+source:
+  url: https://github.com/casadi/casadi/releases/download/${{ version }}/casadi-source-v${{ version }}.zip
+  sha256: 4b9c9e9020a1f4e394c472aa49f86da573e3e14170d526d45724d539864cf038
+  file_name: ${{ version }}.zip
+  patches:
+    - patches/0001-Rename-qpOASES-namespace-to-casadi_qpOASES.patch
+    - patches/0003-Modernize-Python-find_package.patch
+    - patches/0004-Bypass-CMake-crosscompiling-conda-forge-CI-issue.patch
+    - patches/0005-support-osqp1-backport-pr-4105.patch
+    - patches/0006-Fix-FindEigen3-cmake.patch
+
+build:
+  number: 5
+  dynamic_linking:
+    rpaths:
+      - lib/
+      - lib/${{ name }}/
+
+requirements:
+  build:
+    - if: build_platform != target_platform
+      then: python
+    - if: build_platform != target_platform
+      then: cross-python_${{ target_platform }}
+    - if: build_platform != target_platform
+      then: numpy
+    - pkgconf
+    - cmake
+    - ninja
+    - swig
+    - ${{ compiler('c') }}
+    - ${{ stdlib("c") }}
+    - ${{ compiler('cxx') }}
+    - if: win
+      then: clang
+  host:
+    - eigen
+    - libblas
+    - libcblas
+    - liblapack
+    - python
+    - numpy
+    - libosqp
+    - proxsuite
+    # We add eigen-abi-devel to respect the case B in https://github.com/conda-forge/eigen-feedstock/blob/main/recipe/README.md for proxsuite
+    - eigen-abi-devel
+    - tinyxml2
+    - ipopt
+    # libblasfeo is included as it is a public dependency of libfatrop
+    - if: unix
+      then: libblasfeo
+    - if: unix
+      then: libfatrop
+    - mumps-seq
+  run:
+    - python
+  run_exports:
+    - ${{ pin_subpackage('casadi', upper_bound='x.x') }}
+
+tests:
+  - python:
+      imports:
+        - casadi
+        - casadi.tools.structure3
+      pip_check: false
+  - files:
+      recipe:
+        - ipopt_nl.py
+    requirements:
+      run:
+        - pip
+        - cmake-package-check
+        - ${{ compiler('c') }}
+        - ${{ compiler('cxx') }}
+    script:
+      - python ipopt_nl.py
+      - if: linux
+        then: OMP_CANCELLATION=true OMP_PROC_BIND=true python ipopt_nl.py spral
+      - if: unix
+        then: test $(pip list | grep casadi | tr -s " " | grep $PKG_VERSION | wc -l) -eq 1
+      - cmake-package-check casadi --targets casadi::casadi
+
+about:
+  license: LGPL-3.0-or-later
+  license_file: LICENSE.txt
+  summary: CasADi is a symbolic framework for numeric optimization
+  homepage: http://casadi.org
+
+extra:
+  recipe-maintainers:
+    - agriyakhetarpal
+    - traversaro
+    - pstjohn
+    - pariterre
